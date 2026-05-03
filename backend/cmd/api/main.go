@@ -42,7 +42,14 @@ func main() {
 		logger.Info("database pool configured")
 	}
 
-	router := apphttp.NewRouter(referenceRepo, availabilityService, appointmentService, logger, middleware.JSONLogger(logger))
+	router := apphttp.NewRouter(
+		referenceRepo,
+		availabilityService,
+		appointmentService,
+		logger,
+		middleware.JSONLogger(logger),
+		middleware.CORS(cfg.CORSAllowedOrigins),
+	)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
