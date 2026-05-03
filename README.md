@@ -4,6 +4,13 @@ Technical assessment project for Keyloop, Scenario A: Unified Service Scheduler.
 
 This is a production-oriented MVP with production-minded design choices. It is not claimed to be production ready.
 
+## Live Demo
+
+- Frontend Live Demo: <https://phifin.github.io/keyloop-service-scheduler/>
+- Backend API: <https://keyloop-scheduler-api.onrender.com>
+
+The backend is hosted on Render free tier, so the first request after inactivity may take 30-60 seconds while the service wakes up. The live demo is useful for review and video walkthroughs, but the local setup remains the reliable source of truth for validating migrations, seed data, tests, and backend behavior.
+
 ## Project Overview
 
 The application supports a dealership service scheduling workflow:
@@ -19,6 +26,7 @@ The application supports a dealership service scheduling workflow:
 - Backend primary layer: Go, chi, PostgreSQL, pgx.
 - Frontend demo layer: React, Vite, TypeScript, React Router, Tailwind CSS.
 - Database: PostgreSQL migrations and stable seed data.
+- Live deployment: GitHub Pages frontend, Render backend, Supabase PostgreSQL database.
 - Documentation: Markdown and Mermaid diagrams.
 
 The backend owns scheduling correctness. The frontend calls the backend APIs and does not duplicate booking business logic.
@@ -29,6 +37,7 @@ The backend owns scheduling correctness. The frontend calls the backend APIs and
 - Database: PostgreSQL
 - Migrations: golang-migrate
 - Frontend: React, Vite, TypeScript, React Router, Tailwind CSS
+- Hosting: GitHub Pages, Render, Supabase PostgreSQL
 - Tooling: Docker Compose, Makefile
 - Documentation: Markdown, Mermaid
 
@@ -55,6 +64,7 @@ The backend owns scheduling correctness. The frontend calls the backend APIs and
 |   +-- src/types/
 +-- docs/
 |   +-- ai-collaboration.md
+|   +-- deployment.md
 |   +-- system-design.md
 +-- docker-compose.yml
 +-- Makefile
@@ -83,10 +93,11 @@ Copy or reference `.env.example`:
 ```sh
 PORT=8080
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/keyloop_scheduler?sslmode=disable
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://phifin.github.io
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-The backend defaults to `PORT=8080`. The frontend uses `VITE_API_BASE_URL` and expects the backend at `http://localhost:8080` by default.
+The backend defaults to `PORT=8080` and uses `DATABASE_URL` for PostgreSQL. `CORS_ALLOWED_ORIGINS` is a comma-separated allowlist; the deployed backend must allow `https://phifin.github.io`. The frontend uses `VITE_API_BASE_URL` and expects the backend at `http://localhost:8080` by default.
 
 ## Run PostgreSQL
 
@@ -271,20 +282,23 @@ SELECT pg_advisory_xact_lock(hashtext($1::text));
 
 A production-grade improvement would add PostgreSQL exclusion constraints using `tstzrange(start_time, end_time)`.
 
-## Run Tests
+## Test Coverage Notes
+
+The automated checks focus on the scheduler's risk areas:
+
+- Scheduling/business logic tests for availability decisions.
+- Overlap tests, including adjacent appointments that must not conflict.
+- Resource unavailable behavior when technicians or service bays are blocked.
+- Cancellation behavior that frees previously blocked resources.
+- HTTP handler validation and status-code mapping.
+- Optional repository integration tests against PostgreSQL for transactional booking behavior.
+- Frontend TypeScript production build verification.
 
 Backend unit and handler tests:
 
 ```sh
 cd backend
 go test ./...
-```
-
-Frontend production build:
-
-```sh
-cd frontend
-npm run build
 ```
 
 Optional repository integration tests use a temporary PostgreSQL container:
@@ -294,19 +308,50 @@ cd backend
 RUN_DB_INTEGRATION=1 go test ./internal/repository -run TestAppointmentRepositoryIntegration -count=1
 ```
 
+Frontend production build:
+
+```sh
+cd frontend
+npm run build
+```
+
 ## Design Documentation
 
 - [System Design](docs/system-design.md)
 - [AI Collaboration Narrative](docs/ai-collaboration.md)
+- [Deployment Notes](docs/deployment.md)
 - [OpenAPI Specification](backend/openapi.yaml)
+
+## AI Collaboration Narrative
+
+AI was used as an implementation accelerator and review partner. The work was split into controlled phases: scaffolding, database schema, reference APIs, availability logic, appointment booking, frontend demo, audits, and documentation. Each phase used explicit constraints, such as avoiding scheduling logic during scaffolding, avoiding appointment creation during availability work, and keeping backend business rules out of the frontend.
+
+AI output was reviewed through tests, focused code audits, manual checks, and live behavior. The most important reviews covered overlap boundaries, transaction and advisory lock correctness, cancellation behavior, stale frontend availability state, and deployment configuration. Final correctness and design ownership remained with the developer submitting the assessment.
+
+See [docs/ai-collaboration.md](docs/ai-collaboration.md) for the full narrative.
+
+## Deployment Notes
+
+- Frontend hosting: GitHub Pages at <https://phifin.github.io/keyloop-service-scheduler/>.
+- Backend hosting: Render at <https://keyloop-scheduler-api.onrender.com>.
+- Database hosting: Supabase PostgreSQL.
+- Frontend routing: `HashRouter`, which avoids refresh 404s on GitHub Pages.
+- GitHub Pages build variables: `VITE_BASE_PATH=/keyloop-service-scheduler/` and `VITE_API_BASE_URL=https://keyloop-scheduler-api.onrender.com`.
+- Render variables: `PORT`, `DATABASE_URL`, and `CORS_ALLOWED_ORIGINS`.
+- CORS must include `https://phifin.github.io`.
+- Render free tier can cold start after inactivity, so the first request may take 30-60 seconds.
+- Supabase Session Pooler may be needed when deploying from IPv4-only networks.
 
 ## Final Deliverable Checklist
 
 - System Design Document: [docs/system-design.md](docs/system-design.md)
+- Working Code Repository: backend, frontend, migrations, seed data, tests, and deployment workflow.
+- README build/run/test instructions: local setup, API examples, tests, troubleshooting, and deployment notes.
 - AI Collaboration Narrative: [docs/ai-collaboration.md](docs/ai-collaboration.md)
 - Backend implementation: Go API with reference data, availability, appointment creation, listing, detail, and cancellation.
 - Frontend demo: React/Vite workflow for booking, appointment list, appointment detail, and cancellation.
 - Tests: backend tests with `go test ./...`; frontend build with `npm run build`; optional PostgreSQL repository integration tests.
+- Live demo links: GitHub Pages frontend and Render backend.
 - Video submission: to be recorded separately.
 
 ## Assumptions

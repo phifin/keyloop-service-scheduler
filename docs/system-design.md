@@ -4,7 +4,7 @@
 
 Keyloop Scenario A asks for a unified service appointment scheduler for dealership servicing. The system must let a user select a customer, vehicle, dealership, service type, and start time, then determine whether a qualified technician and service bay are both available for the full service duration.
 
-This repository implements a production-oriented MVP. The backend is the primary fully implemented layer. The frontend is a demo layer that exercises the end-to-end booking workflow.
+This repository implements a production-oriented MVP. The backend is the primary fully implemented service layer. The frontend is an additional demo layer that exercises the end-to-end booking workflow.
 
 ## 2. Goals
 
@@ -14,6 +14,7 @@ This repository implements a production-oriented MVP. The backend is the primary
 - Allow adjacent appointments while blocking true overlaps for confirmed appointments.
 - Provide a React demo UI for booking, viewing, and cancelling appointments.
 - Include tests for core scheduling logic, handler validation, and appointment repository behavior.
+- Support a simple live deployment for assessment review.
 
 ## 3. Non-Goals
 
@@ -34,6 +35,7 @@ This repository implements a production-oriented MVP. The backend is the primary
 - `CANCELLED` and `COMPLETED` appointments do not block availability.
 - Times are submitted as RFC3339 timestamps and stored as `TIMESTAMPTZ`.
 - The seeded dealership uses stable UUIDs so demos and tests can reference known records.
+- The live deployment uses GitHub Pages for the frontend, Render for the backend, and Supabase PostgreSQL for the database.
 
 ## 5. Architecture Overview
 
@@ -63,6 +65,12 @@ flowchart TD
 
 The backend owns validation, scheduling decisions, transactional booking, persistence, and response shaping. The frontend does not contain business rules; it calls backend APIs and presents loading, empty, error, success, and conflict states.
 
+In the live assessment deployment, the same architecture is hosted as:
+
+- Frontend: GitHub Pages.
+- Backend API: Render.
+- Database: Supabase PostgreSQL.
+
 ## 6. Component Responsibilities
 
 - `backend/cmd/api`: application entry point, configuration loading, server startup.
@@ -75,7 +83,22 @@ The backend owns validation, scheduling decisions, transactional booking, persis
 - `frontend/src/pages`: booking, appointment list, and appointment detail views.
 - `docs`: design and AI collaboration narrative.
 
-## 7. Data Model
+## 7. Data Flow
+
+The normal booking flow is:
+
+1. The frontend loads reference data from the backend.
+2. The user selects dealership, customer, vehicle, service type, and start time.
+3. The frontend calls `GET /availability` to get a point-in-time availability snapshot.
+4. If the snapshot is available, the user can submit `POST /appointments`.
+5. The backend validates the request and re-checks availability inside a PostgreSQL transaction.
+6. The backend assigns one qualified available technician and one available service bay.
+7. The backend inserts a `CONFIRMED` appointment and returns the created record.
+8. Appointment list and detail views read the persisted appointment data.
+
+`GET /availability` improves the user experience, but `POST /appointments` is the source of truth.
+
+## 8. Data Model
 
 ```mermaid
 erDiagram
@@ -156,7 +179,7 @@ erDiagram
 
 Important constraints include positive service durations, vehicle years greater than 1900, appointment end time after start time, valid appointment statuses, UUID primary keys, and foreign keys across all appointment relationships.
 
-## 8. API Design
+## 9. API Design
 
 Reference APIs:
 
@@ -177,7 +200,7 @@ Scheduling APIs:
 
 Responses are JSON and frontend-friendly. Invalid UUIDs and missing required parameters return `400`. Unknown resources return `404`. Resource conflicts return `409`. Unexpected failures return `500` with a generic client-facing message.
 
-## 9. Scheduling and Availability Logic
+## 10. Scheduling and Availability Logic
 
 Availability is based on both technician and service bay availability for the entire service duration.
 
@@ -217,7 +240,7 @@ sequenceDiagram
     API-->>UI: 200 JSON
 ```
 
-## 10. Appointment Booking Flow
+## 11. Appointment Booking Flow
 
 `POST /appointments` is the source of truth. The backend validates the request, verifies relationships, calculates the end time from service type duration, and performs the availability re-check inside a PostgreSQL transaction before inserting.
 
@@ -235,7 +258,7 @@ sequenceDiagram
     Handler->>Service: BookAppointment
     Service->>Repo: CreateAppointment
     Repo->>DB: BEGIN
-    Repo->>DB: SELECT pg_advisory_xact_lock(hashtext(dealershipId))
+    Repo->>DB: SELECT pg_advisory_xact_lock(hashtext($1::text))
     Repo->>DB: Verify customer, vehicle, dealership, service type
     Repo->>DB: Re-check qualified available technician
     Repo->>DB: Re-check available service bay
@@ -253,7 +276,7 @@ sequenceDiagram
 
 Cancellation sets an appointment to `CANCELLED`. A cancelled appointment no longer blocks future availability or booking. A completed appointment cannot be cancelled.
 
-## 11. Concurrency and Consistency Strategy
+## 12. Concurrency and Consistency Strategy
 
 The MVP uses a pragmatic transaction strategy:
 
@@ -271,7 +294,7 @@ SELECT pg_advisory_xact_lock(hashtext($1::text));
 
 This reduces double-booking races within a dealership while keeping the implementation understandable for the assessment. A production-grade improvement would add PostgreSQL exclusion constraints using `tstzrange(start_time, end_time)` so the database itself rejects conflicting resource assignments.
 
-## 12. Observability Strategy
+## 13. Observability Strategy
 
 The backend uses minimal structured JSON logs for request handling and scheduling events. Logged events include:
 
@@ -286,7 +309,7 @@ The backend uses minimal structured JSON logs for request handling and schedulin
 
 The next production step would add request IDs, metrics, tracing, and structured error classification across repository and handler boundaries.
 
-## 13. Technology Choices
+## 14. Technology Choices
 
 - Go: small, explicit backend with strong standard library support.
 - chi: lightweight HTTP router with clear middleware and route grouping.
@@ -295,8 +318,11 @@ The next production step would add request IDs, metrics, tracing, and structured
 - golang-migrate: simple migration workflow.
 - React, Vite, TypeScript: fast demo UI with typed API integration.
 - Tailwind CSS: lightweight styling without a heavy component framework.
+- GitHub Pages: simple static hosting for the frontend demo.
+- Render: straightforward API hosting for assessment review.
+- Supabase PostgreSQL: managed PostgreSQL for the deployed backend.
 
-## 14. Testing Strategy
+## 15. Testing Strategy
 
 The project includes:
 
@@ -308,19 +334,19 @@ The project includes:
 
 The core correctness focus is appointment creation, conflict handling, cancellation behavior, and the rule that cancelled and completed appointments do not block resources.
 
-## 15. Security Considerations
+## 16. Security Considerations
 
-Current MVP security is intentionally limited. The system avoids leaking raw database errors to clients and uses parameterized SQL through pgx. Required future controls include authentication, authorization, rate limiting, CORS policy review, input size limits, secrets management, TLS, audit logging, and customer data privacy controls.
+Current MVP security is intentionally limited. The system avoids leaking raw database errors to clients and uses parameterized SQL through pgx. CORS is configured with an explicit origin allowlist rather than a wildcard. Required future controls include authentication, authorization, rate limiting, CORS policy review, input size limits, secrets management, TLS, audit logging, and customer data privacy controls.
 
-## 16. Scalability and Reliability Considerations
+## 17. Scalability and Reliability Considerations
 
-The current design can scale vertically and by running multiple API instances against PostgreSQL. The dealership-scoped advisory lock limits concurrent booking writes per dealership, which is acceptable for an MVP but should be monitored. Useful next steps include connection pool tuning, read pagination, database-level exclusion constraints, metrics, health/readiness checks, backups, and automated migration deployment.
+The current design can scale vertically and by running multiple API instances against PostgreSQL. The dealership-scoped advisory lock limits concurrent booking writes per dealership, which is acceptable for an MVP but should be monitored. Render free-tier hosting may cold start after inactivity, so local setup remains the most reliable validation path. Supabase Session Pooler may be needed for IPv4-only deployment networks. Useful next steps include connection pool tuning, read pagination, database-level exclusion constraints, metrics, health/readiness checks, backups, and automated migration deployment.
 
-## 17. GenAI-Assisted Design Process
+## 18. GenAI-Assisted Design Process
 
 AI assistance was used to accelerate scaffolding, implementation planning, migration creation, API implementation, frontend demo work, and targeted audits. The important correctness decisions were verified through code review and tests, especially the overlap rule, transaction boundary, advisory lock placement, cancellation behavior, and stale frontend availability handling.
 
-## 18. Future Improvements
+## 19. Future Improvements
 
 - Add PostgreSQL exclusion constraints for technician and service bay conflicts.
 - Add business hours, technician shifts, holidays, and dealership-local scheduling rules.
