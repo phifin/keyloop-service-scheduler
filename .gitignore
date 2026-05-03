@@ -1,0 +1,33 @@
+# Go
+bin/
+*.test
+
+# Node
+node_modules/
+dist/
+build/
+coverage/
+tsconfig.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Logs
+*.log
+
+# Test/build artifacts
+*.out
+*.coverprofile
+tmp/
+*.tmp
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3

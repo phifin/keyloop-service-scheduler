@@ -1,0 +1,595 @@
+openapi: 3.0.3
+info:
+  title: Keyloop Unified Service Scheduler API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /dealerships:
+    get:
+      summary: List dealerships
+      responses:
+        "200":
+          description: Dealership reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dealership"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /availability:
+    get:
+      summary: Check service appointment availability
+      description: Returns a point-in-time availability snapshot. Appointment creation must re-check availability transactionally before inserting a confirmed appointment.
+      parameters:
+        - name: dealershipId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: serviceTypeId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Dealership or service type was not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /appointments:
+    get:
+      summary: List appointments
+      parameters:
+        - name: dealershipId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CONFIRMED, CANCELLED, COMPLETED]
+      responses:
+        "200":
+          description: Appointment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentListItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      summary: Create a confirmed appointment
+      description: Re-checks availability inside a database transaction and uses a dealership-scoped PostgreSQL advisory lock before inserting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentRequest"
+      responses:
+        "201":
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ResourceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /appointments/{appointmentId}:
+    get:
+      summary: Get appointment detail
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Appointment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /appointments/{appointmentId}/cancel:
+    patch:
+      summary: Cancel an appointment
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Appointment cancelled, or already cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Completed appointment cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /customers:
+    get:
+      summary: List customers
+      responses:
+        "200":
+          description: Customer reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /customers/{customerId}/vehicles:
+    get:
+      summary: List vehicles for a customer
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Customer vehicle reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Customer was not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /service-types:
+    get:
+      summary: List service types
+      responses:
+        "200":
+          description: Service type reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /technicians:
+    get:
+      summary: List technicians for a dealership
+      parameters:
+        - name: dealershipId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Technician reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Technician"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /service-bays:
+    get:
+      summary: List service bays for a dealership
+      parameters:
+        - name: dealershipId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Service bay reference data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceBay"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unexpected database or server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ResourceUnavailable:
+      description: No qualified technician and service bay are available
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: bad_request
+        message:
+          type: string
+          example: dealershipId is required
+        code:
+          type: string
+          nullable: true
+          example: RESOURCE_UNAVAILABLE
+    Dealership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Downtown Keyloop Motors
+        address:
+          type: string
+        timezone:
+          type: string
+          example: America/Detroit
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: John Smith
+        email:
+          type: string
+          example: john.smith@example.com
+        phone:
+          type: string
+          nullable: true
+          example: +1-555-0101
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        vin:
+          type: string
+          example: KLSSVIN000000001
+        make:
+          type: string
+          example: Toyota
+        model:
+          type: string
+          example: Corolla
+        year:
+          type: integer
+          example: 2021
+    ServiceType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Oil Change
+        durationMinutes:
+          type: integer
+          example: 30
+        requiredSkillCode:
+          type: string
+          example: OIL_CHANGE
+    Technician:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        dealershipId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Alex Morgan
+        skills:
+          type: array
+          items:
+            type: string
+          example:
+            - GENERAL_MAINTENANCE
+            - OIL_CHANGE
+    ServiceBay:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        dealershipId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Bay 1
+    AvailabilityResource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Alex Morgan
+    AvailabilityResult:
+      type: object
+      properties:
+        dealershipId:
+          type: string
+          format: uuid
+        serviceTypeId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-05-04T09:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          example: "2026-05-04T09:30:00Z"
+        available:
+          type: boolean
+          example: true
+        availableTechnicians:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityResource"
+        availableServiceBays:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityResource"
+        reason:
+          type: string
+          nullable: true
+          example: null
+    CreateAppointmentRequest:
+      type: object
+      required:
+        - customerId
+        - vehicleId
+        - dealershipId
+        - serviceTypeId
+        - startTime
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        dealershipId:
+          type: string
+          format: uuid
+        serviceTypeId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-05-04T14:00:00Z"
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        vehicleId:
+          type: string
+          format: uuid
+        dealershipId:
+          type: string
+          format: uuid
+        serviceTypeId:
+          type: string
+          format: uuid
+        technicianId:
+          type: string
+          format: uuid
+        serviceBayId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED, COMPLETED]
+    AppointmentListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerName:
+          type: string
+        vehicleVin:
+          type: string
+        vehicleLabel:
+          type: string
+        dealershipName:
+          type: string
+        serviceTypeName:
+          type: string
+        technicianName:
+          type: string
+        serviceBayName:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED, COMPLETED]
+    AppointmentDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED, COMPLETED]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        customer:
+          $ref: "#/components/schemas/AppointmentRef"
+        vehicle:
+          $ref: "#/components/schemas/AppointmentVehicle"
+        dealership:
+          $ref: "#/components/schemas/AppointmentRef"
+        serviceType:
+          $ref: "#/components/schemas/AppointmentRef"
+        technician:
+          $ref: "#/components/schemas/AppointmentRef"
+        serviceBay:
+          $ref: "#/components/schemas/AppointmentRef"
+    AppointmentRef:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    AppointmentVehicle:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vin:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
