@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
 import AppointmentDetailPage from './pages/AppointmentDetailPage';
 import AppointmentsPage from './pages/AppointmentsPage';
@@ -7,7 +7,7 @@ import HomePage from './pages/HomePage';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
@@ -16,6 +16,6 @@ export default function App() {
           <Route path="/appointments/:appointmentId" element={<AppointmentDetailPage />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
