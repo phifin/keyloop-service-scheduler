@@ -11,6 +11,28 @@ This is a production-oriented MVP with production-minded design choices. It is n
 
 The backend is hosted on Render free tier, so the first request after inactivity may take 30-60 seconds while the service wakes up. The live demo is useful for review and video walkthroughs, but the local setup remains the reliable source of truth for validating migrations, seed data, tests, and backend behavior.
 
+## Quick Start (Local)
+
+Run the full system locally in a few commands:
+
+```sh
+# Start PostgreSQL
+docker compose up -d
+
+# Apply migrations and seed data
+make migrate-up
+make seed
+
+# Run backend
+cd backend
+go run ./cmd/api
+
+# Run frontend in a second terminal
+cd frontend
+npm install
+npm run dev
+```
+
 ## Project Overview
 
 The application supports a dealership service scheduling workflow:
